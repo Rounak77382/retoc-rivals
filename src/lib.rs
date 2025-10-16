@@ -53,7 +53,6 @@ use tracing::instrument;
 pub use version::EngineVersion;
 use zen_asset_conversion::ConvertedZenAssetBundle;
 
-
 #[derive(Parser, Debug)]
 pub struct ActionManifest {
     #[arg(index = 1)]
@@ -101,13 +100,13 @@ struct ActionVerify {
 }
 
 #[derive(Parser, Debug)]
-struct ActionUnpack {
+pub struct ActionUnpack {
     #[arg(index = 1)]
-    utoc: PathBuf,
+    pub utoc: PathBuf,
     #[arg(index = 2)]
-    output: PathBuf,
+    pub output: PathBuf,
     #[arg(short, long, default_value = "false")]
-    verbose: bool,
+    pub verbose: bool,
 }
 
 #[derive(Parser, Debug)]
@@ -195,7 +194,7 @@ pub struct ActionToZen {
     no_parallel: bool,
 }
 
-impl ActionToZen{
+impl ActionToZen {
     pub fn new(input: PathBuf, output: PathBuf, version: EngineVersion) -> Self {
         Self {
             input,
@@ -265,7 +264,11 @@ enum Action {
 
 #[derive(Parser, Debug)]
 struct Args {
-    #[arg(short, long,default_value="0C263D8C22DCB085894899C3A3796383E9BF9DE0CBFB08C9BF2DEF2E84F29D74")]
+    #[arg(
+        short,
+        long,
+        default_value = "0C263D8C22DCB085894899C3A3796383E9BF9DE0CBFB08C9BF2DEF2E84F29D74"
+    )]
     aes_key: Option<String>,
     #[arg(long)]
     override_container_header_version: Option<EIoContainerHeaderVersion>,
@@ -280,7 +283,7 @@ fn main() -> Result<()> {
         container_header_version_override: args.override_container_header_version,
         ..Default::default()
     };
-    println!("Using aes key: {:?}",&args.aes_key);
+    println!("Using aes key: {:?}", &args.aes_key);
     if let Some(aes) = args.aes_key.clone() {
         config
             .aes_keys
@@ -290,7 +293,10 @@ fn main() -> Result<()> {
 
     let aes = AesKey::from_str(&args.aes_key.unwrap().clone()).unwrap().0;
     match args.action {
-        Action::Manifest(action) => { action_manifest(action, config); Ok(()) },
+        Action::Manifest(action) => {
+            action_manifest(action, config);
+            Ok(())
+        }
         Action::Info(action) => action_info(action, config),
         Action::List(action) => action_list(action, config),
         Action::Verify(action) => action_verify(action, config),
@@ -308,7 +314,10 @@ fn main() -> Result<()> {
     }
 }
 
-pub fn action_manifest(args: ActionManifest, config: Arc<Config>) -> Result<(PackageStoreManifest)> {
+pub fn action_manifest(
+    args: ActionManifest,
+    config: Arc<Config>,
+) -> Result<(PackageStoreManifest)> {
     let iostore = iostore::open(args.utoc, config)?;
 
     let entries = Arc::new(Mutex::new(vec![]));
@@ -368,7 +377,6 @@ pub fn action_manifest(args: ActionManifest, config: Arc<Config>) -> Result<(Pac
     let manifest = manifest::PackageStoreManifest {
         oplog: manifest::OpLog { entries },
     };
-
 
     return Ok((manifest));
 }
@@ -511,7 +519,7 @@ fn action_verify(args: ActionVerify, config: Arc<Config>) -> Result<()> {
     Ok(())
 }
 
-fn action_unpack(args: ActionUnpack, config: Arc<Config>) -> Result<()> {
+pub fn action_unpack(args: ActionUnpack, config: Arc<Config>) -> Result<()> {
     let mut stream = BufReader::new(fs::File::open(&args.utoc)?);
     let ucas = &args.utoc.with_extension("ucas");
 
@@ -674,8 +682,9 @@ struct ParallelPakWriter {
 impl FileWriterTrait for ParallelPakWriter {
     // TODO: pass in relative path to this argument
     fn write_file(&self, path: String, allow_compress: bool, data: Vec<u8>) -> Result<()> {
-
-        let entry = self.entry_builder.build_entry(allow_compress, data,&path)?;
+        let entry = self
+            .entry_builder
+            .build_entry(allow_compress, data, &path)?;
         self.tx.send((path, entry))?;
         Ok(())
     }
@@ -2524,13 +2533,13 @@ impl EIoChunkType {
 
 use crate::asset_conversion::FZenPackageContext;
 use crate::container_header::EIoContainerHeaderVersion;
+use crate::manifest::PackageStoreManifest;
 use crate::shader_library::{
     get_shader_asset_info_filename_from_library_filename, rebuild_shader_library_from_io_store,
 };
 use crate::zen::FPackageFileVersion;
 use directory_index::*;
 use zen::get_package_name;
-use crate::manifest::PackageStoreManifest;
 
 mod directory_index {
     use typed_path::Utf8Component as _;
