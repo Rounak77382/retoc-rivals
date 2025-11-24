@@ -53,6 +53,12 @@ use tracing::instrument;
 pub use version::EngineVersion;
 use zen_asset_conversion::ConvertedZenAssetBundle;
 
+/// Public function to open an IO store container
+pub fn open_iostore<P: AsRef<Path>>(path: P, config: Arc<Config>) -> Result<Box<dyn IoStoreTrait>> {
+    iostore::open(path, config)
+}
+
+
 #[derive(Parser, Debug)]
 pub struct ActionManifest {
     #[arg(index = 1)]
@@ -100,13 +106,13 @@ struct ActionVerify {
 }
 
 #[derive(Parser, Debug)]
-pub struct ActionUnpack {
+struct ActionUnpack {
     #[arg(index = 1)]
-    pub utoc: PathBuf,
+    utoc: PathBuf,
     #[arg(index = 2)]
-    pub output: PathBuf,
+    output: PathBuf,
     #[arg(short, long, default_value = "false")]
-    pub verbose: bool,
+    verbose: bool,
 }
 
 #[derive(Parser, Debug)]
@@ -194,7 +200,7 @@ pub struct ActionToZen {
     no_parallel: bool,
 }
 
-impl ActionToZen {
+impl ActionToZen{
     pub fn new(input: PathBuf, output: PathBuf, version: EngineVersion) -> Self {
         Self {
             input,
@@ -264,11 +270,7 @@ enum Action {
 
 #[derive(Parser, Debug)]
 struct Args {
-    #[arg(
-        short,
-        long,
-        default_value = "0C263D8C22DCB085894899C3A3796383E9BF9DE0CBFB08C9BF2DEF2E84F29D74"
-    )]
+    #[arg(short, long,default_value="0C263D8C22DCB085894899C3A3796383E9BF9DE0CBFB08C9BF2DEF2E84F29D74")]
     aes_key: Option<String>,
     #[arg(long)]
     override_container_header_version: Option<EIoContainerHeaderVersion>,
@@ -283,7 +285,7 @@ fn main() -> Result<()> {
         container_header_version_override: args.override_container_header_version,
         ..Default::default()
     };
-    println!("Using aes key: {:?}", &args.aes_key);
+    println!("Using aes key: {:?}",&args.aes_key);
     if let Some(aes) = args.aes_key.clone() {
         config
             .aes_keys
@@ -293,10 +295,7 @@ fn main() -> Result<()> {
 
     let aes = AesKey::from_str(&args.aes_key.unwrap().clone()).unwrap().0;
     match args.action {
-        Action::Manifest(action) => {
-            action_manifest(action, config);
-            Ok(())
-        }
+        Action::Manifest(action) => { action_manifest(action, config); Ok(()) },
         Action::Info(action) => action_info(action, config),
         Action::List(action) => action_list(action, config),
         Action::Verify(action) => action_verify(action, config),
@@ -314,10 +313,7 @@ fn main() -> Result<()> {
     }
 }
 
-pub fn action_manifest(
-    args: ActionManifest,
-    config: Arc<Config>,
-) -> Result<(PackageStoreManifest)> {
+pub fn action_manifest(args: ActionManifest, config: Arc<Config>) -> Result<(PackageStoreManifest)> {
     let iostore = iostore::open(args.utoc, config)?;
 
     let entries = Arc::new(Mutex::new(vec![]));
@@ -377,6 +373,7 @@ pub fn action_manifest(
     let manifest = manifest::PackageStoreManifest {
         oplog: manifest::OpLog { entries },
     };
+
 
     return Ok((manifest));
 }
@@ -519,7 +516,7 @@ fn action_verify(args: ActionVerify, config: Arc<Config>) -> Result<()> {
     Ok(())
 }
 
-pub fn action_unpack(args: ActionUnpack, config: Arc<Config>) -> Result<()> {
+fn action_unpack(args: ActionUnpack, config: Arc<Config>) -> Result<()> {
     let mut stream = BufReader::new(fs::File::open(&args.utoc)?);
     let ucas = &args.utoc.with_extension("ucas");
 
@@ -682,9 +679,8 @@ struct ParallelPakWriter {
 impl FileWriterTrait for ParallelPakWriter {
     // TODO: pass in relative path to this argument
     fn write_file(&self, path: String, allow_compress: bool, data: Vec<u8>) -> Result<()> {
-        let entry = self
-            .entry_builder
-            .build_entry(allow_compress, data, &path)?;
+
+        let entry = self.entry_builder.build_entry(allow_compress, data,&path)?;
         self.tx.send((path, entry))?;
         Ok(())
     }
@@ -1925,7 +1921,7 @@ mod chunk_id {
     use super::*;
 
     #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-    pub(crate) struct FIoChunkIdRaw {
+    pub struct FIoChunkIdRaw {
         pub(crate) id: [u8; 12],
     }
     impl std::fmt::Debug for FIoChunkIdRaw {
@@ -1972,7 +1968,7 @@ mod chunk_id {
     }
 
     #[derive(Clone, Copy)]
-    pub(crate) struct FIoChunkId {
+    pub struct FIoChunkId {
         id: [u8; 12],
     }
     impl std::cmp::Eq for FIoChunkId {}
@@ -2076,7 +2072,7 @@ mod chunk_id {
         pub(crate) fn get_chunk_id(&self) -> u64 {
             u64::from_le_bytes(self.id[0..8].try_into().unwrap())
         }
-        pub(crate) fn get_chunk_type(&self) -> EIoChunkType {
+        pub fn get_chunk_type(&self) -> EIoChunkType {
             EIoChunkType::from_repr(self.id[11] & 0b11_1111).unwrap()
         }
         pub(crate) fn get_raw(&self) -> FIoChunkIdRaw {
@@ -2353,7 +2349,7 @@ impl Writeable for FIoStoreTocEntryMetaFlags {
     Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, FromRepr, Serialize, Deserialize,
 )]
 #[repr(u8)]
-enum EIoStoreTocVersion {
+pub enum EIoStoreTocVersion {
     #[default]
     Invalid,
     Initial,
@@ -2427,7 +2423,7 @@ struct FIoStoreTocChunkInfo {
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, FromRepr, AsRefStr)]
 #[repr(u8)]
-enum EIoChunkType {
+pub enum EIoChunkType {
     Invalid,
     ExportBundleData,
     BulkData,
@@ -2533,13 +2529,13 @@ impl EIoChunkType {
 
 use crate::asset_conversion::FZenPackageContext;
 use crate::container_header::EIoContainerHeaderVersion;
-use crate::manifest::PackageStoreManifest;
 use crate::shader_library::{
     get_shader_asset_info_filename_from_library_filename, rebuild_shader_library_from_io_store,
 };
 use crate::zen::FPackageFileVersion;
 use directory_index::*;
 use zen::get_package_name;
+use crate::manifest::PackageStoreManifest;
 
 mod directory_index {
     use typed_path::Utf8Component as _;
