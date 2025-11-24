@@ -53,6 +53,12 @@ use tracing::instrument;
 pub use version::EngineVersion;
 use zen_asset_conversion::ConvertedZenAssetBundle;
 
+/// Public function to open an IO store container
+pub fn open_iostore<P: AsRef<Path>>(path: P, config: Arc<Config>) -> Result<Box<dyn IoStoreTrait>> {
+    iostore::open(path, config)
+}
+
+
 #[derive(Parser, Debug)]
 pub struct ActionManifest {
     #[arg(index = 1)]
@@ -100,13 +106,13 @@ struct ActionVerify {
 }
 
 #[derive(Parser, Debug)]
-pub struct ActionUnpack {
+struct ActionUnpack {
     #[arg(index = 1)]
-    pub utoc: PathBuf,
+    utoc: PathBuf,
     #[arg(index = 2)]
-    pub output: PathBuf,
+    output: PathBuf,
     #[arg(short, long, default_value = "false")]
-    pub verbose: bool,
+    verbose: bool,
 }
 
 #[derive(Parser, Debug)]
@@ -519,7 +525,7 @@ fn action_verify(args: ActionVerify, config: Arc<Config>) -> Result<()> {
     Ok(())
 }
 
-pub fn action_unpack(args: ActionUnpack, config: Arc<Config>) -> Result<()> {
+fn action_unpack(args: ActionUnpack, config: Arc<Config>) -> Result<()> {
     let mut stream = BufReader::new(fs::File::open(&args.utoc)?);
     let ucas = &args.utoc.with_extension("ucas");
 
@@ -1925,7 +1931,7 @@ mod chunk_id {
     use super::*;
 
     #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-    pub(crate) struct FIoChunkIdRaw {
+    pub struct FIoChunkIdRaw {
         pub(crate) id: [u8; 12],
     }
     impl std::fmt::Debug for FIoChunkIdRaw {
@@ -1972,7 +1978,7 @@ mod chunk_id {
     }
 
     #[derive(Clone, Copy)]
-    pub(crate) struct FIoChunkId {
+    pub struct FIoChunkId {
         id: [u8; 12],
     }
     impl std::cmp::Eq for FIoChunkId {}
@@ -2076,7 +2082,7 @@ mod chunk_id {
         pub(crate) fn get_chunk_id(&self) -> u64 {
             u64::from_le_bytes(self.id[0..8].try_into().unwrap())
         }
-        pub(crate) fn get_chunk_type(&self) -> EIoChunkType {
+        pub fn get_chunk_type(&self) -> EIoChunkType {
             EIoChunkType::from_repr(self.id[11] & 0b11_1111).unwrap()
         }
         pub(crate) fn get_raw(&self) -> FIoChunkIdRaw {
@@ -2353,7 +2359,7 @@ impl Writeable for FIoStoreTocEntryMetaFlags {
     Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, FromRepr, Serialize, Deserialize,
 )]
 #[repr(u8)]
-enum EIoStoreTocVersion {
+pub enum EIoStoreTocVersion {
     #[default]
     Invalid,
     Initial,
@@ -2427,7 +2433,7 @@ struct FIoStoreTocChunkInfo {
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, FromRepr, AsRefStr)]
 #[repr(u8)]
-enum EIoChunkType {
+pub enum EIoChunkType {
     Invalid,
     ExportBundleData,
     BulkData,
